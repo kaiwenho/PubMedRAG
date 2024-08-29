@@ -1,4 +1,4 @@
-This project is a Flask-based API that answers user questions by retrieving relevant information from scientific publications and using that information to generate a natural language response.
+This project is a Flask-based API that answers user questions by retrieving relevant information from [PubMed](https://pubmed.ncbi.nlm.nih.gov/) scientific publications and using that information to generate a natural language response.
 
 ## API Overview
 ### Input Data Structure
