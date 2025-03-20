@@ -7,21 +7,12 @@ from datasets import load_dataset
 import os
 import re
 import json
+from utils import create_milvus_schema
 
 MAX_ROWS_PER_COLLECTION = 20_000_000
 TOTAL_FILE_COUNT = 1219
 
-schema = MilvusClient.create_schema(
-    auto_id=True,
-    enable_dynamic_field=False
-)
-
-schema.add_field(field_name="id", datatype=DataType.INT64, is_primary=True, auto_id=True)
-schema.add_field(field_name="pmid", datatype=DataType.INT64)
-schema.add_field(field_name="sentence", datatype=DataType.VARCHAR, max_length=60535)
-schema.add_field(field_name="vector", datatype=DataType.FLOAT_VECTOR, dim=384)
-
-schema.verify()
+schema = create_milvus_schema()
 
 # print(schema.fields)
 # print(schema.primary_field)
@@ -58,14 +49,15 @@ count = 0
 # Initialize the first writer
 current_writer = create_new_writer()
 
-for i in range(1, TOTAL_FILE_COUNT):
+for i in range(1183, TOTAL_FILE_COUNT+1):
     filename = f"data/pubmed24n{i:04d}.parquet"
     print(f"Loading {filename}")
 
     # Load the dataset from Hugging Face
     data = load_dataset(
         "biomedical-translator/pubmed2024_sentence_embeddings",
-        data_files=filename
+        data_files=filename,
+        trust_remote_code=True
     )
     df = data["train"].to_pandas()
     num_rows = len(df)
@@ -74,6 +66,8 @@ for i in range(1, TOTAL_FILE_COUNT):
     if count + num_rows > MAX_ROWS_PER_COLLECTION:
         print(f"Reached {count} rows. Closing writer...")
         prepared_data_path_and_batch_count.append(get_writer_path_and_file_count(current_writer))
+        with open('prepared_data_path_and_batch_count.json', 'w') as file:
+            json.dump(prepared_data_path_and_batch_count, file)
         current_writer = create_new_writer()
         count = 0
 
@@ -92,7 +86,7 @@ for i in range(1, TOTAL_FILE_COUNT):
         count += 1
 
     current_writer.commit()
-    print(f'committed to folder {get_writer_path_and_file_count(current_writer)[0]}')
+    print(f'committed to folder {get_writer_path_and_file_count(current_writer)[0]} with total rows = {count}')
 
 # Final commit for whatever is left in this last batch
 # current_writer.commit()
