@@ -49,7 +49,7 @@ count = 0
 # Initialize the first writer
 current_writer = create_new_writer()
 
-for i in range(1183, TOTAL_FILE_COUNT+1):
+for i in range(1, TOTAL_FILE_COUNT+1):
     filename = f"data/pubmed24n{i:04d}.parquet"
     print(f"Loading {filename}")
 
@@ -92,7 +92,7 @@ for i in range(1183, TOTAL_FILE_COUNT+1):
 # current_writer.commit()
 path_and_count = get_writer_path_and_file_count(current_writer)
 prepared_data_path_and_batch_count.append(path_and_count)
-print(f"Committed final writer with total rows={count} to folder  {path_and_count[0]}.")
+print(f"Committed final writer with total rows={count} to folder {path_and_count[0]}.")
 
 # Saving the meta data of the prepared source data
 with open('prepared_data_path_and_batch_count.json', 'w') as file:
