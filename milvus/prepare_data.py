@@ -10,7 +10,6 @@ import json
 
 MAX_ROWS_PER_COLLECTION = 20_000_000
 TOTAL_FILE_COUNT = 1219
-COMMIT_SIZE = 200_000
 
 schema = MilvusClient.create_schema(
     auto_id=True,
@@ -54,9 +53,8 @@ def create_new_writer():
     )
     return writer
 
-count = 0
 prepared_data_path_and_batch_count = []
-
+count = 0
 # Initialize the first writer
 current_writer = create_new_writer()
 
@@ -74,10 +72,8 @@ for i in range(1, TOTAL_FILE_COUNT):
 
     # If adding these rows will exceed limit, commit + re-initiate writer
     if count + num_rows > MAX_ROWS_PER_COLLECTION:
-        print(f"Reached {count} rows. Committing and closing writer...")
-        current_writer.commit()
+        print(f"Reached {count} rows. Closing writer...")
         prepared_data_path_and_batch_count.append(get_writer_path_and_file_count(current_writer))
-
         current_writer = create_new_writer()
         count = 0
 
@@ -94,12 +90,12 @@ for i in range(1, TOTAL_FILE_COUNT):
             "vector": vectors[j]
         })
         count += 1
-        if count % COMMIT_SIZE == 0:
-            current_writer.commit()
-            print(f'committed to folder {get_writer_path_and_file_count(current_writer)[0]}')
+
+    current_writer.commit()
+    print(f'committed to folder {get_writer_path_and_file_count(current_writer)[0]}')
 
 # Final commit for whatever is left in this last batch
-current_writer.commit()
+# current_writer.commit()
 path_and_count = get_writer_path_and_file_count(current_writer)
 prepared_data_path_and_batch_count.append(path_and_count)
 print(f"Committed final writer with total rows={count} to folder  {path_and_count[0]}.")
