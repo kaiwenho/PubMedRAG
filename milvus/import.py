@@ -54,3 +54,8 @@ for i in range(len(paths)):
 
     job_id = resp.json()['data']['jobId']
     print(job_id)
+
+    # release the collection for RAM efficiency
+    client.release_collection(
+        collection_name=collection_name
+    )
