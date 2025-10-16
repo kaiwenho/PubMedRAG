@@ -21,9 +21,11 @@ IMPORTANT:
 - Do not correct imperfect sentence segmentation in the abstract - use it as-is
 - One unmatched sentence may map to multiple abstract sentences
 - Focus on finding the source content, even if wording differs
+- If you cannot find any correct matched sentences in the abstract for an unmatched sentence, return an empty list for that sentence
 
 OUTPUT: Return a Python list of the corresponding abstract sentences for each unmatched sentence, in order.
 Example: "[sentence1, sentence2, ...]"
+If no matches are found, return: "[]"
 
 Which abstract sentences do the unmatched sentences map to?
 """
@@ -109,20 +111,45 @@ def fix_specific_rows(df, row_indices, abstracts_dict, client, reprocess=True):
     return df_copy
 
 def parse_llm_list(llm_output):
-    result = ast.literal_eval(llm_output)
+    """Parse LLM output into a Python list, handling common formatting issues."""
+    # Strip whitespace
+    llm_output = llm_output.strip()
+
+    # Remove markdown code blocks if present
+    if llm_output.startswith('```'):
+        # Extract content between ``` markers
+        lines = llm_output.split('\n')
+        # Remove first line (```python or ```)
+        lines = lines[1:]
+        # Remove last line if it's ```
+        if lines and lines[-1].strip() == '```':
+            lines = lines[:-1]
+        llm_output = '\n'.join(lines).strip()
+
+    # Try to find a list in the output
+    # Look for content between [ and ]
+    list_match = re.search(r'\[.*\]', llm_output, re.DOTALL)
+    if list_match:
+        llm_output = list_match.group(0)
+
+    try:
+        result = ast.literal_eval(llm_output)
+    except (SyntaxError, ValueError) as e:
+        # If parsing fails, return empty list and log the issue
+        print(f"Failed to parse LLM output: {llm_output[:200]}...")
+        print(f"Error: {e}")
+        return []
 
     def flatten_to_strings(item):
-        """Recursively flatten nested lists and collect all strings."""
         if isinstance(item, str):
             return [item]
         elif isinstance(item, list):
-            flattened = []
-            for sub_item in item:
-                flattened.extend(flatten_to_strings(sub_item))
-            return flattened
+            result = []
+            for subitem in item:
+                result.extend(flatten_to_strings(subitem))
+            return result
         else:
-            # Handle non-string, non-list items (convert to string)
-            return [str(item)]
+            return []
 
     return flatten_to_strings(result)
 
