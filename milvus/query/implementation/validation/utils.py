@@ -111,23 +111,27 @@ def fix_specific_rows(df, row_indices, abstracts_dict, client, reprocess=True):
     return df_copy
 
 def parse_llm_list(llm_output):
-    """Parse LLM output into a Python list, handling common formatting issues."""
+    """
+    Parse LLM output into a Python list, handling common formatting issues.
+
+    Returns:
+        List of strings on success
+        Raises ValueError if parsing fails completely
+    """
+    original_output = llm_output  # Keep for error reporting
+
     # Strip whitespace
     llm_output = llm_output.strip()
 
     # Remove markdown code blocks if present
     if llm_output.startswith('```'):
-        # Extract content between ``` markers
         lines = llm_output.split('\n')
-        # Remove first line (```python or ```)
-        lines = lines[1:]
-        # Remove last line if it's ```
+        lines = lines[1:]  # Remove first line (```python or ```)
         if lines and lines[-1].strip() == '```':
-            lines = lines[:-1]
+            lines = lines[:-1]  # Remove last line if it's ```
         llm_output = '\n'.join(lines).strip()
 
     # Try to find a list in the output
-    # Look for content between [ and ]
     list_match = re.search(r'\[.*\]', llm_output, re.DOTALL)
     if list_match:
         llm_output = list_match.group(0)
@@ -135,10 +139,10 @@ def parse_llm_list(llm_output):
     try:
         result = ast.literal_eval(llm_output)
     except (SyntaxError, ValueError) as e:
-        # If parsing fails, return empty list and log the issue
-        print(f"Failed to parse LLM output: {llm_output[:200]}...")
-        print(f"Error: {e}")
-        return []
+        # If parsing fails, raise an exception with details
+        print(f"Failed to parse LLM output: {original_output[:200]}...")
+        print(f"Parse error: {e}")
+        raise ValueError(f"Could not parse LLM response as Python list: {e}")
 
     def flatten_to_strings(item):
         if isinstance(item, str):
