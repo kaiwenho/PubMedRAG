@@ -9,7 +9,7 @@ The precomputed sentence embeddings can be found at:
 👉 **[Hugging Face Dataset](https://huggingface.co/datasets/biomedical-translator/pubmed2024_sentence_embeddings)**
 
 ## Embedding Computation Details
-- **Sentence Tokenization Method**: `sent_tokenize`
+- **Sentence Tokenization Method**: `NLTK sent_tokenize`
 - **Embedding Model Used**: `all-MiniLM-L6-v2`
 - **Embedding Dimensions**: `384`
 - **Number of Embeddings**: `185,145,351`
