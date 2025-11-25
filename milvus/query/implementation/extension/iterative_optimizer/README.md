@@ -363,13 +363,13 @@ print(f"Abstract classification threshold: {params['abstract_classification']['t
 ### Computational Requirements
 
 **Milvus:**
-- RAM: 40GB minimum (for 3.8M+ embeddings per collection)
+- RAM: 40GB minimum (for 18M+ embeddings per collection)
 - Storage: ~900GB for vector database
 
 **LLM (Ollama):**
 - GPU: Recommended for acceptable inference speed
   - 20B model: 13GB+ VRAM
-  - 120B model: 48GB+ VRAM (for Round 2)
+  - 120B model: 48GB+ VRAM
 
 **Embedding Models:**
 - sentence-transformers/all-MiniLM-L6-v2: Lightweight general-purpose model, ~50MB in float16/bfloat16 format
