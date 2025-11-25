@@ -412,7 +412,7 @@ print(f"Abstract classification threshold: {params['abstract_classification']['t
 
 ## Contact and Support
 
-For questions, issues, or to request dictionary files, open an issue in the repository.
+For questions, issues, or to request dictionary files, please open an issue in the repository.
 
 ## Acknowledgments
 
