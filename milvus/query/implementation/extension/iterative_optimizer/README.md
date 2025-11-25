@@ -379,7 +379,8 @@ print(f"Abstract classification threshold: {params['abstract_classification']['t
 
 **Measured Performance:**
 - **Semantic search**: ~180 seconds per batch (across 10 collections)
-**LLM review**: ~10.5 seconds per edge-abstract pair on average
+
+- **LLM review**: ~10.5 seconds per edge-abstract pair on average
   - Round 1 only ('no' results, 20B model): ~7-8 seconds
   - Both rounds ('yes'/'maybe' results, 20B + 120B models): ~13-14 seconds
 
