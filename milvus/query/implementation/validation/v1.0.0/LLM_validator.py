@@ -353,21 +353,23 @@ Output Format: Return only a JSON object in the following structure:
                 responses.append(response_entry)
 
                 # Parse response
-                try:
-                    extracted_data = self.response_parser.parse_response(response_text)
+                extracted_data = self.response_parser.parse_response(response_text)
+
+                # Explicitly check if parsing succeeded
+                if extracted_data is not None:
                     result_entry = {
                         'edge_index': prompt_data['edge_index'],
                         'pmid': prompt_data['pmid'],
                         'extraction_status': 'success',
                         'extracted_data': extracted_data
                     }
-                except Exception as parse_error:
-                    self.logger.debug(f"Parse error for edge {prompt_data['edge_index']}, PMID {prompt_data['pmid']}: {parse_error}")
+                else:
+                    self.logger.debug(f"Parse returned None for edge {prompt_data['edge_index']}, PMID {prompt_data['pmid']}")
                     result_entry = {
                         'edge_index': prompt_data['edge_index'],
                         'pmid': prompt_data['pmid'],
                         'extraction_status': 'parse_failed',
-                        'error': str(parse_error)
+                        'error': 'Parser returned None'
                     }
 
                 results.append(result_entry)
@@ -1033,9 +1035,12 @@ if __name__ == "__main__":
             return json.load(file)
 
     # These would be loaded from your actual data sources
-    edges_file_path = "data/arax_rtx_273_semmed_biomarker_for_edges.parquet"
+    edges_file_path = "data/arax_rtx_273_semmed_prevents_edges.parquet"
     node_dict = load_json('dict/rtx-kg2_id_info_dictionary.json')
     predicate_dict = load_json('dict/biolink_pred_info_dictionary.json')
+
+    # special case: biolink:prevents was updated in a newer version of biolink model
+    predicate_dict['biolink:prevents'] = predicate_dict['biolink:preventative_for_condition']
 
     from ollama import Client
     llm_client = Client()
