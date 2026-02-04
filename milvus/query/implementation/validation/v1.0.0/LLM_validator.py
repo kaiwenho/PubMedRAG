@@ -353,21 +353,23 @@ Output Format: Return only a JSON object in the following structure:
                 responses.append(response_entry)
 
                 # Parse response
-                try:
-                    extracted_data = self.response_parser.parse_response(response_text)
+                extracted_data = self.response_parser.parse_response(response_text)
+
+                # Explicitly check if parsing succeeded
+                if extracted_data is not None:
                     result_entry = {
                         'edge_index': prompt_data['edge_index'],
                         'pmid': prompt_data['pmid'],
                         'extraction_status': 'success',
                         'extracted_data': extracted_data
                     }
-                except Exception as parse_error:
-                    self.logger.debug(f"Parse error for edge {prompt_data['edge_index']}, PMID {prompt_data['pmid']}: {parse_error}")
+                else:
+                    self.logger.debug(f"Parse returned None for edge {prompt_data['edge_index']}, PMID {prompt_data['pmid']}")
                     result_entry = {
                         'edge_index': prompt_data['edge_index'],
                         'pmid': prompt_data['pmid'],
                         'extraction_status': 'parse_failed',
-                        'error': str(parse_error)
+                        'error': 'Parser returned None'
                     }
 
                 results.append(result_entry)
@@ -407,7 +409,14 @@ Output Format: Return only a JSON object in the following structure:
 
         for result in self.round1_results:
             if result['extraction_status'] == 'success':
-                support = result['extracted_data'].get('support?', '').lower()
+                extracted_data = result['extracted_data']
+
+                # Validate that extracted_data is a dict with expected structure
+                if not isinstance(extracted_data, dict):
+                    self.logger.warning(f"Invalid extracted_data type for edge {result['edge_index']}, PMID {result['pmid']}: expected dict, got {type(extracted_data).__name__}")
+                    continue
+
+                support = extracted_data.get('support?', '').lower()
                 if support in ['yes', 'maybe']:
                     supporting_results.append(result)
                 elif support == 'no':
@@ -484,14 +493,35 @@ Output Format: Return only a JSON object in the following structure:
 
         for result in self.round1_results:
             if result['extraction_status'] == 'success':
-                support = result['extracted_data'].get('support?', '').lower()
+                extracted_data = result['extracted_data']
+
+                # Validate extracted_data is a dict
+                if not isinstance(extracted_data, dict):
+                    self.logger.warning(
+                        f"Invalid extracted_data type for edge {result['edge_index']}, "
+                        f"PMID {result['pmid']}: expected dict, got {type(extracted_data).__name__}"
+                    )
+                    continue
+
+                support = extracted_data.get('support?', '').lower()
 
                 if support in ['yes', 'maybe']:
                     key = (result['edge_index'], result['pmid'])
                     round2_result = round2_dict.get(key)
 
                     if round2_result and round2_result['extraction_status'] == 'success':
-                        round2_support = round2_result['extracted_data'].get('support?', '').lower()
+                        round2_extracted = round2_result['extracted_data']
+
+                        # Validate round2 extracted_data is also a dict
+                        if not isinstance(round2_extracted, dict):
+                            self.logger.warning(
+                                f"Invalid round2 extracted_data type for edge {result['edge_index']}, "
+                                f"PMID {result['pmid']}: expected dict, got {type(round2_extracted).__name__}"
+                            )
+                            merged.append(result)  # Fall back to round1 result
+                            continue
+
+                        round2_support = round2_extracted.get('support?', '').lower()
                         if round2_support == 'no':
                             additional_no_support.append(round2_result)
                         else:
@@ -917,20 +947,71 @@ async def main(
         logger=logger
     )
 
-    # Fetch abstracts for all unique PMIDs (batched)
-    logger.info("\n" + "="*70)
-    logger.info("FETCHING ABSTRACTS")
-    logger.info("="*70)
-    abstracts_dict = await validator.get_abstracts_dict(all_pmids, batch_size=batch_size)
+    # # Fetch abstracts for all unique PMIDs (batched)
+    # logger.info("\n" + "="*70)
+    # logger.info("FETCHING ABSTRACTS")
+    # logger.info("="*70)
+    # abstracts_dict = await validator.get_abstracts_dict(all_pmids, batch_size=batch_size)
+    #
+    # # Save abstracts_dict
+    # abstracts_file = output_path / "abstracts_dict.parquet"
+    # logger.info(f"\nSaving abstracts dictionary to {abstracts_file}")
+    # abstracts_df = pd.DataFrame([
+    #     {'pmid': pmid, 'abstract': data['abstract'], 'sentences': data['sentences']}
+    #     for pmid, data in abstracts_dict.items()
+    # ])
+    # abstracts_df.to_parquet(abstracts_file, index=False)
 
-    # Save abstracts_dict
+    # Check if abstracts file already exists (from a previous run)
     abstracts_file = output_path / "abstracts_dict.parquet"
-    logger.info(f"\nSaving abstracts dictionary to {abstracts_file}")
-    abstracts_df = pd.DataFrame([
-        {'pmid': pmid, 'abstract': data['abstract'], 'sentences': data['sentences']}
-        for pmid, data in abstracts_dict.items()
-    ])
-    abstracts_df.to_parquet(abstracts_file, index=False)
+
+    if abstracts_file.exists():
+        logger.info("\n" + "="*70)
+        logger.info("LOADING CACHED ABSTRACTS")
+        logger.info("="*70)
+        logger.info(f"Found existing abstracts file: {abstracts_file}")
+
+        # Load from existing file
+        abstracts_df = pd.read_parquet(abstracts_file)
+        abstracts_dict = {}
+        for _, row in abstracts_df.iterrows():
+            abstracts_dict[row['pmid']] = {
+                'abstract': row['abstract'],
+                'sentences': row['sentences']
+            }
+
+        logger.info(f"Loaded {len(abstracts_dict)} abstracts from cache")
+
+        # Check if there are any new PMIDs not in the cache
+        cached_pmids = set(abstracts_dict.keys())
+        missing_pmids = [pmid for pmid in all_pmids if pmid not in cached_pmids]
+
+        if missing_pmids:
+            logger.info(f"Found {len(missing_pmids)} new PMIDs not in cache, fetching...")
+            new_abstracts = await validator.get_abstracts_dict(missing_pmids, batch_size=batch_size)
+            abstracts_dict.update(new_abstracts)
+
+            # Save updated abstracts_dict
+            logger.info(f"Updating abstracts cache with {len(new_abstracts)} new abstracts")
+            abstracts_df = pd.DataFrame([
+                {'pmid': pmid, 'abstract': data['abstract'], 'sentences': data['sentences']}
+                for pmid, data in abstracts_dict.items()
+            ])
+            abstracts_df.to_parquet(abstracts_file, index=False)
+    else:
+        # Fetch abstracts for all unique PMIDs (batched)
+        logger.info("\n" + "="*70)
+        logger.info("FETCHING ABSTRACTS")
+        logger.info("="*70)
+        abstracts_dict = await validator.get_abstracts_dict(all_pmids, batch_size=batch_size)
+
+        # Save abstracts_dict
+        logger.info(f"\nSaving abstracts dictionary to {abstracts_file}")
+        abstracts_df = pd.DataFrame([
+            {'pmid': pmid, 'abstract': data['abstract'], 'sentences': data['sentences']}
+            for pmid, data in abstracts_dict.items()
+        ])
+        abstracts_df.to_parquet(abstracts_file, index=False)
 
     # Run validation
     validation_results_df, no_support_df = await validator.validate_edges(
@@ -1033,9 +1114,12 @@ if __name__ == "__main__":
             return json.load(file)
 
     # These would be loaded from your actual data sources
-    edges_file_path = "data/arax_rtx_273_semmed_biomarker_for_edges.parquet"
+    edges_file_path = "data/arax_rtx_273_semmed_disrupts_edges.parquet"
     node_dict = load_json('dict/rtx-kg2_id_info_dictionary.json')
     predicate_dict = load_json('dict/biolink_pred_info_dictionary.json')
+
+    # # special case: biolink:prevents was updated in a newer version of biolink model
+    # predicate_dict['biolink:prevents'] = predicate_dict['biolink:preventative_for_condition']
 
     from ollama import Client
     llm_client = Client()
@@ -1049,5 +1133,5 @@ if __name__ == "__main__":
         predicate_dict=predicate_dict,
         llm_client=llm_client,
         response_parser=response_parser,
-        output_dir="./validation_output"
+        output_dir="./validation_output/disrupts"
     ))
